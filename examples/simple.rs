@@ -101,6 +101,6 @@ fn main() {
     let interpreter_res = expr.accept(&mut Interpreter, &());
     let printer_res = expr.accept(&mut Printer, &());
 
-    println!("interpreter: {interpreter_res}");
-    println!("printer: {printer_res}");
+    assert_eq!(interpreter_res, 46.0);
+    assert_eq!(printer_res, "(23 + (42 - 19))");
 }
