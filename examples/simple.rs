@@ -1,76 +1,106 @@
-
-use visita::{node_group, visitor, Visit, Data, NodeFamily};
+use derive_more::From;
+use visita::{impl_visitor, node_group, Node};
 
 #[derive(Debug, Clone)]
-enum BinOp { Add, Sub }
-
-#[node_group(data = ())]
-#[derive(Debug, Clone)]
-enum Expr {
-
-	#[derive(Debug, Clone)]
-	NumLit(f32),
-
-	#[derive(Debug, Clone)]
-	Bin {
-		op: BinOp,
-		lhs: Expr,
-		rhs: Expr,
-	}
-
+enum BinOp {
+    Add,
+    Sub,
 }
 
-#[visitor(Expr, output = f32)]
+#[derive(Debug, Clone)]
+struct NumLit(f32);
+
+#[derive(Debug, Clone)]
+struct Bin {
+    op: BinOp,
+    lhs: Box<Expr>,
+    rhs: Box<Expr>,
+}
+
+#[derive(Debug, Clone, From)]
+enum Expr {
+    NumLit(NumLit),
+    Bin(Bin),
+}
+
+node_group! {
+    family: Expr,
+    nodes: [
+        Expr,
+        NumLit,
+        Bin
+    ],
+    meta: ()
+}
+
 struct Interpreter;
 
-impl Visit<NumLit> for Interpreter {
-	fn visit(&mut self, node: &NumLit, _data: &Data<Self, NumLit>) -> Self::Output {
-		node.0
-	}
+impl_visitor! {
+    Interpreter,
+    family: Expr,
+    output: f32,
+    [
+        Expr => |visitor, node, data| {
+            match node {
+                Expr::NumLit(x) => x.accept(visitor, data),
+                Expr::Bin(x) => x.accept(visitor, data)
+            }
+        },
+        NumLit => |visitor, node, data| {
+            node.0
+        },
+        Bin => |visitor, node, data| {
+            match node.op {
+                BinOp::Add => node.lhs.accept(visitor, data) + node.rhs.accept(visitor, data),
+                BinOp::Sub => node.lhs.accept(visitor, data) - node.rhs.accept(visitor, data)
+            }
+        }
+    ]
 }
 
-impl Visit<Bin> for Interpreter {
-	fn visit(&mut self, node: &Bin, _data: &Data<Self, Bin>) -> Self::Output {
-		match node.op {
-			BinOp::Add => node.lhs.accept(self) + node.rhs.accept(self),
-			BinOp::Sub => node.lhs.accept(self) - node.rhs.accept(self),
-		}
-	}
-}
-
-#[visitor(Expr, output = String)]
 struct Printer;
 
-impl Visit<NumLit> for Printer {
-	fn visit(&mut self, node: &NumLit, _data: &Data<Self, Bin>) -> Self::Output {
-		format!("{}", node.0)
-	}
-}
-
-impl Visit<Bin> for Printer {
-	fn visit(&mut self, node: &Bin, _data: &Data<Self, Bin>) -> Self::Output {
-		format!("({} {} {})",
-			node.lhs.accept(self),
-			match node.op { BinOp::Add => "+", BinOp::Sub => "-" },
-			node.rhs.accept(self),
-		)
-	}
+impl_visitor! {
+    Printer,
+    family: Expr,
+    output: String,
+    [
+        Expr => |visitor, node, data| {
+            match node {
+                Expr::NumLit(x) => x.accept(visitor, data),
+                Expr::Bin(x) => x.accept(visitor, data)
+            }
+        },
+        NumLit => |visitor, node, data| {
+            node.0.to_string()
+        },
+        Bin => |visitor, node, data| {
+            format!("({} {} {})", node.lhs.accept(visitor, data), match node.op {
+                BinOp::Add => "+",
+                BinOp::Sub => "-"
+            }, node.rhs.accept(visitor, data))
+        }
+    ]
 }
 
 fn main() {
-	let expr: Expr = Bin {
-		op: BinOp::Add,
-		lhs: NumLit(23.0).to_node(()),
-		rhs: Bin {
-			op: BinOp::Sub,
-			lhs: NumLit(42.0).to_node(()),
-			rhs: NumLit(19.0).to_node(()),
-		}.to_node(()),
-	}.to_node(());
-	
-	let interpreter_res = expr.accept(&mut Interpreter);
-	let printer_res = expr.accept(&mut Printer);
-	
-	println!("interpreter: {interpreter_res}");
-	println!("printer: {printer_res}");
+    let mut expr: Expr = Bin {
+        op: BinOp::Add,
+        lhs: Box::new(NumLit(23.0).into()),
+        rhs: Box::new(
+            Bin {
+                op: BinOp::Sub,
+                lhs: Box::new(NumLit(42.0).into()),
+                rhs: Box::new(NumLit(19.0).into()),
+            }
+            .into(),
+        ),
+    }
+    .into();
+
+    let interpreter_res = expr.accept(&mut Interpreter, &());
+    let printer_res = expr.accept(&mut Printer, &());
+
+    println!("interpreter: {interpreter_res}");
+    println!("printer: {printer_res}");
 }
