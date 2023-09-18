@@ -13,6 +13,8 @@ repository = "https://github.com/ITesserakt/visita"
 readme = "README.md"
 license = "MIT"
 
+rust-version = "1.65.0"
+
 [dependencies]
 
 [dev-dependencies]
